@@ -32,6 +32,14 @@ interface Tryout {
   is_active: boolean;
 }
 
+interface LearningParty {
+  id: number;
+  zoom_link: string;
+  start_time: string;
+  end_time: string;
+  is_active: boolean;
+}
+
 const supabaseUrl = "https://akpkltltfwyjitbhwtne.supabase.co";
 const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrcGtsdGx0Znd5aml0Ymh3dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2NTk4NzUsImV4cCI6MjA2OTIzNTg3NX0.Kb7-L2FCCymQTbvQOksbzOCi_9twUrX0lFq9cho1WNI";
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -41,6 +49,7 @@ export default function ProgramDetail() {
   const { id } = useParams();
   const [program, setProgram] = useState<ProgramDetail | null>(null);
   const [tryouts, setTryouts] = useState<Tryout[]>([]);
+  const [learningParty, setLearningParty] = useState<LearningParty | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -77,6 +86,16 @@ export default function ProgramDetail() {
         .order("id", { ascending: true });
       if (tryoutError) throw tryoutError;
       setTryouts(tryoutData as Tryout[]);
+
+      const { data: partyData, error: partyError } = await supabase
+        .from("learning_parties")
+        .select("id, zoom_link, start_time, end_time, is_active")
+        .eq("program_id", programId)
+        .eq("is_active", true)
+        .order("start_time", { ascending: true })
+        .maybeSingle();
+      if (partyError) throw partyError;
+      setLearningParty(partyData as LearningParty);
 
       const decodedToken = jwtDecode<CustomJwtPayload>(token);
       const userId = Number(decodedToken.sub) || Number(decodedToken.user?.id);
@@ -173,7 +192,6 @@ export default function ProgramDetail() {
         });
       if (insertError) throw insertError;
 
-      // <<< INI DIA PERUBAHANNYA
       router.refresh();
 
       Swal.fire({
@@ -219,12 +237,45 @@ export default function ProgramDetail() {
   };
 
   const handlePartyBelajar = () => {
-    Swal.fire({
-      title: "Pesta belajar dapat dibuka saat sudah masuk jadwal",
-      icon: "info",
-      confirmButtonText: "OK",
-      confirmButtonColor: "#16A34A",
-    });
+    if (!isRegistered) {
+      Swal.fire({
+        title: "Belum Terdaftar",
+        text: "Silakan daftar terlebih dahulu dengan tiket.",
+        icon: "warning",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+      return;
+    }
+    if (learningParty) {
+      if (new Date() < new Date(learningParty.start_time)) {
+        Swal.fire({
+          title: "Belum Mulai",
+          text: `Party Belajar akan dimulai pada ${new Date(learningParty.start_time).toLocaleString("id-ID")}.`,
+          icon: "info",
+          confirmButtonText: "OK",
+          confirmButtonColor: "#16A34A",
+        });
+      } else if (new Date() > new Date(learningParty.end_time)) {
+        Swal.fire({
+          title: "Sudah Selesai",
+          text: "Party Belajar telah selesai.",
+          icon: "info",
+          confirmButtonText: "OK",
+          confirmButtonColor: "#16A34A",
+        });
+      } else {
+        router.push(`/program/party/${program?.id}`);
+      }
+    } else {
+      Swal.fire({
+        title: "Tidak Tersedia",
+        text: "Belum ada jadwal Party Belajar untuk program ini.",
+        icon: "info",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#16A34A",
+      });
+    }
   };
 
   const handleTryoutClick = () => {
@@ -328,113 +379,112 @@ export default function ProgramDetail() {
         </div>
       </div>
 
-<div
-  className={`grid gap-4 sm:gap-6 mb-8 ${
-    isUTBKProgram ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-2 sm:grid-cols-2 lg:grid-cols-5"
-  }`}
->
-  {isUTBKProgram && (
-    <Link
-      href={isButtonDisabled ? "#" : "/universitas"}
-      className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
-    >
       <div
-        className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
-          isButtonDisabled
-            ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
-            : "hover:shadow-xl hover:scale-105"
+        className={`grid gap-4 sm:gap-6 mb-8 ${
+          isUTBKProgram ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-2 sm:grid-cols-2 lg:grid-cols-5"
         }`}
       >
-        <img src="/Passing Grade.svg" alt="Passing Grade" className="w-16 h-16 mb-4" />
-        <p className="text-center text-gray-800 font-medium">Passing Grade</p>
+        {isUTBKProgram && (
+          <Link
+            href={isButtonDisabled ? "#" : "/universitas"}
+            className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
+          >
+            <div
+              className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+                isButtonDisabled
+                  ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
+                  : "hover:shadow-xl hover:scale-105"
+              }`}
+            >
+              <img src="/Passing Grade.svg" alt="Passing Grade" className="w-16 h-16 mb-4" />
+              <p className="text-center text-gray-800 font-medium">Passing Grade</p>
+            </div>
+          </Link>
+        )}
+
+        <button
+          onClick={handleTryoutClick}
+          disabled={isButtonDisabled}
+          className="w-full h-full"
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
+                : "hover:shadow-xl hover:scale-105"
+            }`}
+          >
+            <img src="/Try Out.svg" alt="Try Out" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Try Out</p>
+          </div>
+        </button>
+
+        <button
+          onClick={handleGroupKonsultasi}
+          disabled={isButtonDisabled}
+          className="w-full h-full"
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
+                : "hover:shadow-xl hover:scale-105"
+            }`}
+          >
+            <img src="/Group Konsultasi.svg" alt="Group Konsultasi" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Group Konsultasi</p>
+          </div>
+        </button>
+
+        <Link
+          href={isButtonDisabled ? "#" : `/program/materi/${program.id}`}
+          className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
+                : "hover:shadow-xl hover:scale-105"
+            }`}
+          >
+            <img src="/Materi.svg" alt="Materi" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Materi</p>
+          </div>
+        </Link>
+
+        <button
+          onClick={handlePartyBelajar}
+          disabled={isButtonDisabled}
+          className="w-full h-full"
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
+                : "hover:shadow-xl hover:scale-105"
+            }`}
+          >
+            <img src="/Party Belajar.svg" alt="Party Belajar" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Party Belajar</p>
+          </div>
+        </button>
+
+        <Link
+          href={isButtonDisabled ? "#" : `/program/agenda/${program.id}`}
+          className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
+                : "hover:shadow-xl hover:scale-105"
+            }`}
+          >
+            <img src="/Jadwal Pendampingan.svg" alt="Jadwal Pendampingan" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Jadwal Pendampingan</p>
+          </div>
+        </Link>
       </div>
-    </Link>
-  )}
-
-  <button
-    onClick={handleTryoutClick}
-    disabled={isButtonDisabled}
-    className="w-full h-full"
-  >
-    <div
-      className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
-        isButtonDisabled
-          ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
-          : "hover:shadow-xl hover:scale-105"
-      }`}
-    >
-      <img src="/Try Out.svg" alt="Try Out" className="w-16 h-16 mb-4" />
-      <p className="text-center text-gray-800 font-medium">Try Out</p>
-    </div>
-  </button>
-
-  <button
-    onClick={handleGroupKonsultasi}
-    disabled={isButtonDisabled}
-    className="w-full h-full"
-  >
-    <div
-      className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
-        isButtonDisabled
-          ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
-          : "hover:shadow-xl hover:scale-105"
-      }`}
-    >
-      <img src="/Group Konsultasi.svg" alt="Group Konsultasi" className="w-16 h-16 mb-4" />
-      <p className="text-center text-gray-800 font-medium">Group Konsultasi</p>
-    </div>
-  </button>
-
-  <Link
-    href={isButtonDisabled ? "#" : `/program/materi/${program.id}`}
-    className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
-  >
-    <div
-      className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
-        isButtonDisabled
-          ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
-          : "hover:shadow-xl hover:scale-105"
-      }`}
-    >
-      <img src="/Materi.svg" alt="Materi" className="w-16 h-16 mb-4" />
-      <p className="text-center text-gray-800 font-medium">Materi</p>
-    </div>
-  </Link>
-
-  <button
-    onClick={handlePartyBelajar}
-    disabled={isButtonDisabled}
-    className="w-full h-full"
-  >
-    <div
-      className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
-        isButtonDisabled
-          ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
-          : "hover:shadow-xl hover:scale-105"
-      }`}
-    >
-      <img src="/Party Belajar.svg" alt="Party Belajar" className="w-16 h-16 mb-4" />
-      <p className="text-center text-gray-800 font-medium">Party Belajar</p>
-    </div>
-  </button>
-
-  <Link
-    href={isButtonDisabled ? "#" : `/program/agenda/${program.id}`}
-    className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
-  >
-    <div
-      className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
-        isButtonDisabled
-          ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
-          : "hover:shadow-xl hover:scale-105"
-      }`}
-    >
-      <img src="/Jadwal Pendampingan.svg" alt="Jadwal Pendampingan" className="w-16 h-16 mb-4" />
-      <p className="text-center text-gray-800 font-medium">Jadwal Pendampingan</p>
-    </div>
-  </Link>
-</div>
-
 
       {!isRegistered && tryouts.length > 0 && (
         <button
