@@ -21,7 +21,7 @@ export default function Universitas() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: keyof University; direction: string } | null>({
     key: "student_count",
-    direction: "descending",
+    direction: "menurun",
   });
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function Universitas() {
         })) as University[];
         setUniversities(enrichedData.sort((a: University, b: University) => (b.student_count || 0) - (a.student_count || 0)));
       } catch (error) {
-        console.error("Error fetching universities:", error);
+        console.error("Error mengambil data universitas:", error);
       }
     };
 
@@ -60,19 +60,19 @@ export default function Universitas() {
       if (!sortConfig) return 0;
       const valueA = a[sortConfig.key] || 0;
       const valueB = b[sortConfig.key] || 0;
-      if (valueA < valueB) return sortConfig.direction === "ascending" ? -1 : 1;
-      if (valueA > valueB) return sortConfig.direction === "ascending" ? 1 : -1;
+      if (valueA < valueB) return sortConfig.direction === "naik" ? -1 : 1;
+      if (valueA > valueB) return sortConfig.direction === "naik" ? 1 : -1;
       return 0;
     });
 
   const handleSort = (key: keyof University) => {
     setSortConfig((prev) => {
       if (!prev || prev.key !== key) {
-        return { key, direction: "descending" };
+        return { key, direction: "menurun" };
       }
-      return prev.direction === "ascending"
-        ? { key, direction: "descending" }
-        : { key, direction: "ascending" };
+      return prev.direction === "naik"
+        ? { key, direction: "menurun" }
+        : { key, direction: "naik" };
     });
   };
 
@@ -87,22 +87,22 @@ export default function Universitas() {
           <FontAwesomeIcon icon={faArrowLeft} className="text-indigo-600 text-lg" />
         </button>
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-blue-600 mb-6 text-center animate-fade-in">
-          University Explorer
+          Universitas
         </h1>
 
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="lg:w-1/4 w-full">
             <aside className="bg-white p-4 rounded-xl shadow-md border border-gray-200">
-              <h3 className="text-lg font-semibold text-indigo-800 mb-4">Filters</h3>
+              <h3 className="text-lg font-semibold text-indigo-800 mb-4">Filter</h3>
               <input
                 type="text"
-                placeholder="Search Universities..."
+                placeholder="Cari Universitas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 mb-4 transition-all"
               />
               <p className="text-sm text-gray-500 mt-2">
-                Explore universities by name or sort below!
+                Cari universitas berdasarkan nama
               </p>
             </aside>
           </div>
@@ -118,21 +118,21 @@ export default function Universitas() {
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                       onClick={() => handleSort("name")}>
-                      University Name
+                      Nama Universitas
                       <FontAwesomeIcon icon={faSort} className="ml-1 text-gray-400" />
                     </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                       onClick={() => handleSort("acceptance_rate")}>
-                      Acceptance Rate (%)
+                      Tingkat Penerimaan (%)
                       <FontAwesomeIcon icon={faSort} className="ml-1 text-gray-400" />
                     </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                       onClick={() => handleSort("student_count")}>
-                      Students
+                      Jumlah Mahasiswa
                       <FontAwesomeIcon icon={faSort} className="ml-1 text-gray-400" />
                     </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Details
+                      Detail
                     </th>
                   </tr>
                 </thead>
@@ -163,7 +163,7 @@ export default function Universitas() {
                             className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center justify-center gap-1"
                           >
                             <FontAwesomeIcon icon={faInfoCircle} className="w-4 h-4" />
-                            View
+                            Lihat
                           </Link>
                         </td>
                       </tr>
@@ -171,7 +171,7 @@ export default function Universitas() {
                   ) : (
                     <tr>
                       <td colSpan={4} className="px-4 py-2 text-center text-gray-500">
-                        No universities found
+                        Tidak ada universitas yang ditemukan
                       </td>
                     </tr>
                   )}
