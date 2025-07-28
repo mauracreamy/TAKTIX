@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
@@ -50,7 +51,6 @@ export default function Home() {
                   className="h-8 w-8 rounded-full object-cover border-2 border-yellow-400"
                 />
               )}
-              
             </div>
           )}
         </div>
@@ -96,15 +96,17 @@ export default function Home() {
           </div>
           <Link href="/program">
             <div className="relative overflow-hidden rounded-2xl border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2">
-              <img
-                src="https://app.taktix.co.id/assets/assets/graduation.jpeg"
-                alt="Program Pendampingan"
-                className="w-full h-56 object-cover rounded-2xl filter blur-sm"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-center justify-center text-white text-center p-4">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-bold">Program Pendampingan</h2>
-                  <p className="text-xs sm:text-sm mt-1">Klik untuk lihat program pendampingan yang anda ikuti</p>
+              <div className="relative">
+                <img
+                  src="https://app.taktix.co.id/assets/assets/graduation.jpeg"
+                  alt="Program Pendampingan"
+                  className="w-full h-56 object-cover rounded-t-2xl filter blur-sm"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-center justify-center text-white text-center p-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold">Program Pendampingan</h2>
+                    <p className="text-xs sm:text-sm mt-1">Klik untuk lihat program pendampingan yang anda ikuti</p>
+                  </div>
                 </div>
               </div>
               <div className="text-center py-2 bg-yellow-400 text-white font-semibold rounded-b-2xl hover:bg-yellow-500 transition-colors">
