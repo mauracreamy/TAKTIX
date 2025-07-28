@@ -133,7 +133,7 @@ export default function DetailUniversitas({ params }: UniversityDetailProps) {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-2 sm:px-4 py-2 text-left text-sm font-semibold text-gray-700">
-                    Jurusan & Tingkat
+                    Jurusan
                   </th>
                   <th className="px-2 sm:px-4 py-2 text-left text-sm font-semibold text-gray-700">
                     Akreditasi
