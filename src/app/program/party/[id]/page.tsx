@@ -1,3 +1,4 @@
+```tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -16,6 +17,7 @@ interface LearningParty {
   start_time: string;
   end_time: string;
   is_active: boolean;
+  description: string | null;
 }
 
 export default function PartyBelajar() {
@@ -34,11 +36,12 @@ export default function PartyBelajar() {
 
       const { data, error } = await supabase
         .from("learning_parties")
-        .select("id, zoom_link, start_time, end_time, is_active")
+        .select("id, zoom_link, start_time, end_time, is_active, description")
         .eq("program_id", programId)
         .eq("is_active", true)
         .order("start_time", { ascending: true });
       if (error) throw error;
+      console.log("Fetched data:", data); // Debug: Log fetched data
       setLearningParties(data as LearningParty[]);
     } catch (err) {
       setError("Gagal memuat data Party Belajar: " + (err as Error).message);
@@ -52,15 +55,27 @@ export default function PartyBelajar() {
     if (id) fetchLearningParties();
   }, [id]);
 
-  const formatDateTime = (date: string) => {
+  // Format date (e.g., "Senin, 28 Juli 2025")
+  const formatDate = (date: string) => {
     return new Date(date).toLocaleString("id-ID", {
       weekday: "long",
       day: "numeric",
       month: "long",
       year: "numeric",
+    });
+  };
+
+  // Format time range (e.g., "09:32 - 16:00")
+  const formatTimeRange = (start: string, end: string) => {
+    const startTime = new Date(start).toLocaleString("id-ID", {
       hour: "2-digit",
       minute: "2-digit",
     });
+    const endTime = new Date(end).toLocaleString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${startTime} - ${endTime}`;
   };
 
   const getPartyStatus = (party: LearningParty) => {
@@ -151,14 +166,15 @@ export default function PartyBelajar() {
                       <FontAwesomeIcon icon={faClock} className="text-yellow-500" />
                       <h4 className="text-lg font-semibold text-gray-700">Sesi Party Belajar</h4>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <p className="text-gray-600">
-                        <strong>Mulai:</strong> {formatDateTime(party.start_time)}
-                      </p>
-                      <p className="text-gray-600">
-                        <strong>Selesai:</strong> {formatDateTime(party.end_time)}
-                      </p>
-                    </div>
+                    <p className="text-gray-600">
+                      <strong>Tanggal:</strong> {formatDate(party.start_time)}
+                    </p>
+                    <p className="text-gray-600 mt-2">
+                      <strong>Waktu:</strong> {formatTimeRange(party.start_time, party.end_time)}
+                    </p>
+                    <p className="text-gray-600 mt-2">
+                      <strong>Deskripsi:</strong> {party.description || "Tidak ada deskripsi tersedia"}
+                    </p>
                     <p
                       className={`text-lg font-semibold mt-4 ${
                         status === "Sedang Berlangsung"
@@ -210,3 +226,4 @@ export default function PartyBelajar() {
     </div>
   );
 }
+```
