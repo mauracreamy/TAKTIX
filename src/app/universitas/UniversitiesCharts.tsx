@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { ApexOptions, ApexAnnotationsText } from "apexcharts";
+import { ApexOptions } from "apexcharts";
+
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
