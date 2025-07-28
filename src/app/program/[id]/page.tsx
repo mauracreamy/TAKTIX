@@ -2,57 +2,153 @@
 
 import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faMapMarkerAlt, faClock } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faRotateRight } from "@fortawesome/free-solid-svg-icons";
+import Link from "next/link";
+import Swal from "sweetalert2";
 import { jwtDecode } from "jwt-decode";
 
 // Definisikan tipe kustom untuk JwtPayload
 interface CustomJwtPayload {
-  sub?: string;
+  sub: string;
   user?: {
     id?: number;
   };
 }
 
+interface ProgramDetail {
+  id: number;
+  name: string;
+  description: string;
+  duration: string;
+  price: number;
+  image_url: string;
+  whatsapp_link: string; // Added whatsapp_link
+}
+
 interface Tryout {
   id: number;
-  program_id: number;
   name: string;
-  total_questions: number;
   is_active: boolean;
-  created_at: string;
-  metadata: string;
-  exam_category: string;
-  price: number;
-  duration_minutes: number;
-  is_free: boolean;
-  location: string;
-  schedule_date: string;
-  description: string;
-  system_info: string;
-  socialization_schedule: string;
-  party_learning_schedule: string;
 }
 
 const supabaseUrl = "https://akpkltltfwyjitbhwtne.supabase.co";
 const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrcGtsdGx0Znd5aml0Ymh3dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2NTk4NzUsImV4cCI6MjA2OTIzNTg3NX0.Kb7-L2FCCymQTbvQOksbzOCi_9twUrX0lFq9cho1WNI";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-export default function Jadwal() {
-  const { id } = useParams();
+// Fungsi untuk mem-parsing deskripsi dengan pemisah |
+const renderDescription = (description: string) => {
+  // Daftar kata kunci untuk teks tebal
+  const boldKeywords = ["TPS", "TWK", "TIU", "TKP", "CAT", "SKD"];
+
+  // Pisahkan deskripsi berdasarkan |
+  const parts = description.split("|").map((part) => part.trim()).filter((part) => part !== "");
+
+  // Kelompokkan subtest berdasarkan kategori
+  const groupedItems: { [key: string]: string[] } = {};
+  let intro = "";
+  let outro = "";
+
+  parts.forEach((part, index) => {
+    if (index === 0) {
+      // Bagian pertama adalah pengantar
+      intro = part;
+    } else if (index === parts.length - 1) {
+      // Bagian terakhir adalah penutup
+      outro = part;
+    } else {
+      // Bagian tengah adalah subtest
+      const [category, item] = part.split(": ").map((s) => s.trim());
+      if (!groupedItems[category]) {
+        groupedItems[category] = [];
+      }
+      groupedItems[category].push(item);
+    }
+  });
+
+  const elements: JSX.Element[] = [];
+
+  // Render pengantar
+  if (intro) {
+    let formattedIntro = intro;
+    boldKeywords.forEach((keyword) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, "g");
+      formattedIntro = formattedIntro.replace(regex, `<strong>${keyword}</strong>`);
+    });
+    elements.push(
+      <p key="intro" className="text-gray-700 mb-2">
+        <span dangerouslySetInnerHTML={{ __html: formattedIntro }} />
+      </p>
+    );
+  }
+
+  // Render subtest per kategori
+  Object.keys(groupedItems).forEach((category, catIndex) => {
+    const formattedItems = groupedItems[category].map((item, itemIndex) => {
+      let formattedItem = item;
+      boldKeywords.forEach((keyword) => {
+        const regex = new RegExp(`\\b${keyword}\\b`, "g");
+        formattedItem = formattedItem.replace(regex, `<strong>${keyword}</strong>`);
+      });
+      return (
+        <li key={`${catIndex}-${itemIndex}`} className="text-gray-700">
+          <span dangerouslySetInnerHTML={{ __html: formattedItem }} />
+        </li>
+      );
+    });
+
+    // Tambahkan subjudul kategori
+    let formattedCategory = category;
+    boldKeywords.forEach((keyword) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, "g");
+      formattedCategory = formattedCategory.replace(regex, `<strong>${keyword}</strong>`);
+    });
+    elements.push(
+      <div key={`category-${catIndex}`} className="mt-4">
+        <h4 className="text-lg font-semibold text-indigo-800">
+          <span dangerouslySetInnerHTML={{ __html: formattedCategory }} />
+        </h4>
+        <ul className="list-disc list-inside mt-2 space-y-1">{formattedItems}</ul>
+      </div>
+    );
+  });
+
+  // Render penutup
+  if (outro) {
+    let formattedOutro = outro;
+    boldKeywords.forEach((keyword) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, "g");
+      formattedOutro = formattedOutro.replace(regex, `<strong>${keyword}</strong>`);
+    });
+    elements.push(
+      <p key="outro" className="text-gray-700 mt-2">
+        <span dangerouslySetInnerHTML={{ __html: formattedOutro }} />
+      </p>
+    );
+  }
+
+  return elements;
+};
+
+export default function ProgramDetail() {
   const router = useRouter();
+  const { id } = useParams();
+  const [program, setProgram] = useState<ProgramDetail | null>(null);
   const [tryouts, setTryouts] = useState<Tryout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [ticketInput, setTicketInput] = useState("");
   const [isRegistered, setIsRegistered] = useState(false);
 
-  const fetchData = async () => {
+  const fetchProgramDetail = async () => {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem("token");
       if (!token || !id) {
+        console.log("No token or ID, redirecting to login");
         router.push("/login");
         return;
       }
@@ -60,128 +156,462 @@ export default function Jadwal() {
       const programId = Number(id);
       if (isNaN(programId)) throw new Error("ID program tidak valid");
 
-      let decodedToken;
-      try {
-        decodedToken = jwtDecode<CustomJwtPayload>(token);
-        console.log("Decoded Token Payload:", decodedToken);
-      } catch (decodeError) {
-        throw new Error("Token tidak valid: " + (decodeError as Error).message);
-      }
-      const userId = Number(decodedToken.user?.id) || Number(decodedToken.sub);
-      if (!userId) throw new Error("User ID tidak ditemukan di token");
+      const { data: programData, error: programError } = await supabase
+        .from("programs")
+        .select("id, name, description, duration, price, image_url, whatsapp_link") // Added whatsapp_link
+        .eq("id", programId)
+        .single();
+      if (programError) throw programError;
+      setProgram(programData as ProgramDetail);
 
-      console.log("Extracted User ID:", userId, "Program ID from URL:", programId);
-
-      const { data: registration, error: regError } = await supabase
-        .from("user_registrations")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("program_id", programId)
-        .limit(1);
-      if (regError) throw new Error("Gagal cek registrasi: " + regError.message);
-      const isUserRegistered = !!registration?.length;
-      setIsRegistered(isUserRegistered);
-      console.log("Registration Data:", registration, "Is Registered:", isUserRegistered);
-
-      if (!isUserRegistered) {
-        throw new Error("Anda belum terdaftar untuk program ini.");
-      }
-
-      const { data, error: tryoutError } = await supabase
+      const { data: tryoutData, error: tryoutError } = await supabase
         .from("tryouts")
-        .select("*")
+        .select("id, name, is_active")
         .eq("program_id", programId)
         .eq("is_active", true)
-        .order("schedule_date", { ascending: true });
+        .order("id", { ascending: true });
       if (tryoutError) throw tryoutError;
-      setTryouts(data as Tryout[]);
+      setTryouts(tryoutData as Tryout[]);
+
+      const decodedToken = jwtDecode<CustomJwtPayload>(token);
+      const userId = Number(decodedToken.sub) || Number(decodedToken.user?.id);
+      console.log("Decoded User ID:", userId);
+      if (userId) {
+        const { data: registration } = await supabase
+          .from("user_registrations")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("program_id", programId)
+          .limit(1);
+        setIsRegistered(!!registration?.length);
+        console.log("Is Registered:", !!registration?.length);
+
+        const { error: activityError } = await supabase.from("user_activities").insert({
+          user_id: userId,
+          program_id: programId,
+          activity_type: "view",
+          created_at: new Date().toISOString(),
+        });
+        if (activityError) {
+          console.error("Error saving activity:", activityError.message);
+        } else {
+          console.log("Activity saved for user:", userId, "program:", programId);
+        }
+      }
     } catch (err) {
-      setError((err as Error).message);
+      setError("Gagal memuat detail program atau tryout: " + (err as Error).message);
+      console.error("Error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (id) fetchData();
+    if (id) fetchProgramDetail();
   }, [id]);
+
+  const handleRegister = () => {
+    if (!isRegistered) setShowRegisterModal(true);
+  };
+
+  const handleTicketRegister = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+    const decodedToken = jwtDecode<CustomJwtPayload>(token);
+    const userId = Number(decodedToken.sub) || Number(decodedToken.user?.id);
+    if (!userId || !ticketInput) {
+      Swal.fire({
+        title: "Error",
+        text: "Masukkan kode tiket yang valid.",
+        icon: "error",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+      return;
+    }
+
+    try {
+      const programId = Number(id);
+      const { data, error } = await supabase
+        .from("tickets_available")
+        .select("id, program_id")
+        .eq("ticket_code", ticketInput)
+        .eq("program_id", programId)
+        .single();
+      if (error || !data) {
+        Swal.fire({
+          title: "Error",
+          text: "Kode tiket tidak valid atau tidak tersedia.",
+          icon: "error",
+          confirmButtonText: "OK",
+          confirmButtonColor: "#DC2626",
+        });
+        return;
+      }
+
+      const { error: deleteError } = await supabase
+        .from("tickets_available")
+        .delete()
+        .eq("ticket_code", ticketInput)
+        .eq("program_id", programId);
+      if (deleteError) throw deleteError;
+
+      const { error: insertError } = await supabase
+        .from("user_registrations")
+        .insert({
+          user_id: userId,
+          program_id: programId,
+          ticket_code: ticketInput,
+        });
+      if (insertError) throw insertError;
+
+      router.refresh();
+
+      Swal.fire({
+        title: "Sukses",
+        text: "Anda telah terdaftar dengan tiket " + ticketInput + "!",
+        icon: "success",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#16A34A",
+      });
+      setShowRegisterModal(false);
+      setIsRegistered(true);
+      setTicketInput("");
+      fetchProgramDetail();
+    } catch (err) {
+      Swal.fire({
+        title: "Error",
+        text: "Gagal mendaftar: " + (err as Error).message,
+        icon: "error",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+      console.error("Error:", err);
+    }
+  };
+
+  const handleOnlinePayment = () => {
+    Swal.fire({
+      title: "Pembayaran Online",
+      text: "Fitur pembayaran online belum tersedia.",
+      icon: "info",
+      confirmButtonText: "OK",
+      confirmButtonColor: "#16A34A",
+    });
+  };
+
+  const handleGroupKonsultasi = () => {
+    if (!isRegistered) {
+      Swal.fire({
+        title: "Belum Terdaftar",
+        text: "Silakan daftar terlebih dahulu dengan tiket.",
+        icon: "warning",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+      return;
+    }
+    if (program?.whatsapp_link) {
+      window.open(program.whatsapp_link, "_blank");
+    } else {
+      Swal.fire({
+        title: "Error",
+        text: "Link grup WhatsApp tidak tersedia.",
+        icon: "error",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+    }
+  };
+
+  const handlePartyBelajar = () => {
+    if (!isRegistered) {
+      Swal.fire({
+        title: "Belum Terdaftar",
+        text: "Silakan daftar terlebih dahulu dengan tiket.",
+        icon: "warning",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+      return;
+    }
+    if (program) {
+      router.push(`/program/party/${program.id}`);
+    } else {
+      Swal.fire({
+        title: "Error",
+        text: "Data program tidak tersedia.",
+        icon: "error",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+    }
+  };
+
+  const handleTryoutClick = () => {
+    if (tryouts.length === 0) {
+      Swal.fire({
+        title: "Tidak Ada Tryout",
+        text: "Tidak ada tryout aktif untuk program ini.",
+        icon: "info",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#16A34A",
+      });
+    } else if (!isRegistered) {
+      Swal.fire({
+        title: "Belum Terdaftar",
+        text: "Silakan daftar terlebih dahulu dengan tiket.",
+        icon: "warning",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+    } else if (program) {
+      router.push(`/program/tryout/${program.id}`);
+    } else {
+      Swal.fire({
+        title: "Error",
+        text: "Data program tidak tersedia.",
+        icon: "error",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+    }
+  };
+
+  const isButtonDisabled = !isRegistered;
+  const isUTBKProgram = program?.name.toLowerCase().includes("utbk");
 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-blue-100">
         <div className="flex items-center gap-3 text-indigo-700 animate-pulse">
           <div className="w-8 h-8 border-4 border-t-indigo-700 border-b-transparent rounded-full animate-spin"></div>
-          <span className="text-2xl font-semibold">Memuat Jadwal...</span>
+          <span className="text-2xl font-semibold">Memuat Detail Program...</span>
         </div>
       </div>
     );
   }
 
-  if (error || !isRegistered) {
-    console.log("Render Error or Not Registered:", error, "isRegistered:", isRegistered);
+  if (error || !program) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-blue-100 p-4 sm:p-6 ml-[64px]">
         <div className="text-center">
-          <p className="text-red-600 text-xl mb-6">{error || "Anda belum terdaftar untuk program ini."}</p>
+          <p className="text-red-600 text-xl mb-6">{error || "Program tidak ditemukan"}</p>
           <button
-            onClick={() => router.push(`/program/${id}`)}
+            onClick={fetchProgramDetail}
             className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all duration-300"
           >
-            <span className="font-medium">Kembali ke Detail Program</span>
+            <FontAwesomeIcon icon={faRotateRight} className="w-5 h-5" />
+            <span className="font-medium">Coba Lagi</span>
           </button>
         </div>
       </div>
     );
   }
 
-  console.log("Rendering Tryouts:", tryouts);
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-blue-100 p-4 sm:p-6 ml-[64px]">
-      <div className="max-w-7xl mx-auto">
+      <div className="flex items-center mb-6">
         <button
+          type="button"
+          className="p-3 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-all duration-300 transform hover:scale-110"
           onClick={() => router.back()}
-          className="p-3 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-all duration-300 transform hover:scale-110 mb-6"
         >
           <FontAwesomeIcon icon={faArrowLeft} className="w-6 h-6 text-indigo-700" />
         </button>
-
-        <h1 className="text-3xl sm:text-4xl font-bold text-indigo-900 mb-8">Jadwal Pendampingan</h1>
-
-        <div className="space-y-6">
-          {tryouts.map((tryout) => (
-            <div
-              key={tryout.id}
-              className="bg-white p-6 rounded-2xl shadow-lg border border-stone-300 hover:shadow-xl transition-all duration-300"
-            >
-              <h3 className="text-xl font-semibold text-indigo-800 mb-2">{tryout.name}</h3>
-              <p className="text-gray-600 text-sm mb-2">
-                <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-2" />
-                Lokasi: {tryout.location}
-              </p>
-              <p className="text-gray-600 text-sm mb-2">
-                <FontAwesomeIcon icon={faClock} className="mr-2" />
-                Tanggal: {new Date(tryout.schedule_date).toLocaleString("id-ID", {
-                  dateStyle: "full",
-                  timeStyle: "short",
-                })}
-              </p>
-              <p className="text-gray-600 text-sm mb-2">Jumlah Soal: {tryout.total_questions}</p>
-              <p className="text-gray-600 text-sm mb-2">Durasi: {tryout.duration_minutes} menit</p>
-              <p className="text-gray-600 text-sm mb-2">Deskripsi: {tryout.description}</p>
-              <p className="text-gray-600 text-sm mb-2">Sistem: {tryout.system_info}</p>
-              <p className="text-gray-600 text-sm mb-2">Sosialisasi Jadwal: {tryout.socialization_schedule}</p>
-              <p className="text-gray-600 text-sm mb-2">Pesta Belajar: {tryout.party_learning_schedule}</p>
-
-            </div>
-          ))}
-        </div>
-
-        {tryouts.length === 0 && (
-          <div className="text-center text-gray-700 mt-10">
-            <p className="text-xl">Tidak ada jadwal pendampingan tersedia.</p>
-          </div>
-        )}
+        <h1 className="ml-6 text-3xl sm:text-4xl font-bold text-indigo-900">Detail Program</h1>
       </div>
+
+      <div
+        className="relative w-full h-64 sm:h-80 bg-cover bg-center rounded-2xl shadow-2xl mb-8"
+        style={{ backgroundImage: `url(${program.image_url})` }}
+      >
+        <div className="absolute inset-0 bg-black bg-opacity-40 rounded-2xl flex items-center justify-center">
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-white drop-shadow-lg">
+            {program.name}
+          </h2>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg mb-8">
+        <h3 className="text-2xl font-semibold text-indigo-800 mb-4">Tentang Program</h3>
+        <div className="text-base sm:text-lg leading-relaxed">
+          {renderDescription(program.description)}
+        </div>
+        <div className="mt-6">
+          <h3 className="text-2xl font-semibold text-indigo-800 mb-2">Informasi</h3>
+          <p className="text-gray-700 text-lg">
+            Harga: <span className="font-bold text-indigo-600">Rp {program.price.toLocaleString("id-ID")}</span>
+          </p>
+          <p className="mt-4">
+            <span className="font-medium">Durasi Pendampingan:</span> {program.duration}
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={`grid gap-4 sm:gap-6 mb-8 ${
+          isUTBKProgram ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-2 sm:grid-cols-2 lg:grid-cols-5"
+        }`}
+      >
+        {isUTBKProgram && (
+          <Link
+            href={isButtonDisabled ? "#" : "/universitas"}
+            className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
+          >
+            <div
+              className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+                isButtonDisabled
+                  ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
+                  : "hover:shadow-xl hover:scale-105"
+              }`}
+            >
+              <img src="/Passing Grade.svg" alt="Passing Grade" className="w-16 h-16 mb-4" />
+              <p className="text-center text-gray-800 font-medium">Passing Grade</p>
+            </div>
+          </Link>
+        )}
+
+        <button
+          onClick={handleTryoutClick}
+          disabled={isButtonDisabled}
+          className="w-full h-full"
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
+                : "hover:shadow-xl hover:scale-105"
+              }`}
+          >
+            <img src="/Try Out.svg" alt="Try Out" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Try Out</p>
+          </div>
+        </button>
+
+        <button
+          onClick={handleGroupKonsultasi}
+          disabled={isButtonDisabled}
+          className="w-full h-full"
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
+                : "hover:shadow-xl hover:scale-105"
+              }`}
+          >
+            <img src="/Group Konsultasi.svg" alt="Group Konsultasi" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Group Konsultasi</p>
+          </div>
+        </button>
+
+        <Link
+          href={isButtonDisabled ? "#" : `/program/materi/${program.id}`}
+          className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
+                : "hover:shadow-xl hover:scale-105"
+              }`}
+          >
+            <img src="/Materi.svg" alt="Materi" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Materi</p>
+          </div>
+        </Link>
+
+        <button
+          onClick={handlePartyBelajar}
+          disabled={isButtonDisabled}
+          className="w-full h-full"
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400 pointer-events-none"
+                : "hover:shadow-xl hover:scale-105"
+              }`}
+          >
+            <img src="/Party Belajar.svg" alt="Party Belajar" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Party Belajar</p>
+          </div>
+        </button>
+
+        <Link
+          href={isButtonDisabled ? "#" : `/program/agenda/${program.id}`}
+          className={`w-full h-full ${isButtonDisabled ? "pointer-events-none" : ""}`}
+        >
+          <div
+            className={`p-6 bg-white rounded-xl border border-stone-300 shadow-md transition-all duration-300 flex flex-col items-center justify-center h-full ${
+              isButtonDisabled
+                ? "opacity-50 cursor-not-allowed bg-red-200 border-red-400"
+                : "hover:shadow-xl hover:scale-105"
+              }`}
+          >
+            <img src="/Jadwal Pendampingan.svg" alt="Jadwal Pendampingan" className="w-16 h-16 mb-4" />
+            <p className="text-center text-gray-800 font-medium">Jadwal Pendampingan</p>
+          </div>
+        </Link>
+      </div>
+
+      {!isRegistered && tryouts.length > 0 && (
+        <button
+          onClick={handleRegister}
+          className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl shadow-lg hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:scale-105 font-bold text-lg mb-6"
+        >
+          Daftar Sekarang
+        </button>
+      )}
+
+      {showRegisterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 hover:shadow-3xl">
+            <h2 className="text-2xl font-bold text-indigo-800 mb-6">Daftar dengan Tiket</h2>
+            <input
+              type="text"
+              value={ticketInput}
+              onChange={(e) => setTicketInput(e.target.value)}
+              placeholder="Masukkan kode tiket (contoh: UTBK-006)"
+              className="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+              onClick={handleTicketRegister}
+              className="w-full py-3 mb-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+            >
+              Daftar dengan Tiket
+            </button>
+            <button
+              onClick={handleOnlinePayment}
+              className="w-full py-3 bg-gray-300 text-black rounded-lg hover:bg-gray-400 transition-colors font-semibold"
+              disabled
+            >
+              Pembayaran Online (Belum Tersedia)
+            </button>
+            <button
+              onClick={() => setShowRegisterModal(false)}
+              className="mt-4 w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isRegistered && tryouts.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={handleTryoutClick}
+            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-xl shadow-lg hover:from-green-700 hover:to-teal-700 transition-all duration-300 transform hover:scale-105 font-bold text-lg"
+          >
+            Mulai Tryout
+          </button>
+        </div>
+      )}
     </div>
   );
 }
