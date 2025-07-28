@@ -25,6 +25,7 @@ export default function PartyBelajar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>("");
 
   useEffect(() => {
     const fetchLearningParty = async () => {
@@ -44,24 +45,36 @@ export default function PartyBelajar() {
         if (error) throw error;
         setLearningParty(data as LearningParty);
 
-        // Update countdown jika belum mulai
-        if (data && new Date() < new Date(data.start_time)) {
-          const updateTimer = () => {
-            const now = new Date();
-            const start = new Date(data.start_time);
-            const diff = start.getTime() - now.getTime();
-            if (diff <= 0) {
-              setTimeLeft(null);
-              return;
-            }
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            setTimeLeft(`${days}d ${hours}j ${minutes}m`);
-          };
-          updateTimer();
-          const timer = setInterval(updateTimer, 60000); // Update setiap menit
-          return () => clearInterval(timer);
+        // Update status dan countdown
+        if (data) {
+          const now = new Date();
+          const start = new Date(data.start_time);
+          const end = new Date(data.end_time);
+
+          if (now < start) {
+            setStatus("Akan Datang");
+            const updateTimer = () => {
+              const diff = start.getTime() - new Date().getTime();
+              if (diff <= 0) {
+                setTimeLeft(null);
+                setStatus("Sedang Berlangsung");
+                return;
+              }
+              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+              const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+              const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+              setTimeLeft(
+                `${days > 0 ? days + " hari, " : ""}${hours > 0 ? hours + " jam, " : ""}${minutes} menit lagi`
+              );
+            };
+            updateTimer();
+            const timer = setInterval(updateTimer, 60000);
+            return () => clearInterval(timer);
+          } else if (now >= start && now <= end) {
+            setStatus("Sedang Berlangsung");
+          } else {
+            setStatus("Selesai");
+          }
         }
       } catch (err) {
         setError("Gagal memuat data Party Belajar: " + (err as Error).message);
@@ -102,7 +115,16 @@ export default function PartyBelajar() {
     );
   }
 
-  const isOngoing = new Date() >= new Date(learningParty.start_time) && new Date() <= new Date(learningParty.end_time);
+  const formatDateTime = (date: string) => {
+    return new Date(date).toLocaleString("id-ID", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-200 to-blue-100 p-4 sm:p-6 ml-[64px] overflow-hidden">
@@ -128,18 +150,34 @@ export default function PartyBelajar() {
           </div>
 
           <div className="bg-gradient-to-br from-yellow-100 to-green-100 p-4 sm:p-6 rounded-xl mb-6 border border-green-200 shadow-inner">
-            <p className="text-gray-700 text-lg mb-2 flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-2">
               <FontAwesomeIcon icon={faClock} className="text-yellow-500" />
-              <strong>Jadwal:</strong> {new Date(learningParty.start_time).toLocaleString("id-ID")} - {new Date(learningParty.end_time).toLocaleString("id-ID")}
+              <h3 className="text-lg font-semibold text-gray-700">Jadwal Sesi</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-gray-600">
+                  <strong>Mulai:</strong> {formatDateTime(learningParty.start_time)}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-600">
+                  <strong>Selesai:</strong> {formatDateTime(learningParty.end_time)}
+                </p>
+              </div>
+            </div>
+            <p className={`text-lg font-semibold mt-4 ${
+              status === "Sedang Berlangsung" ? "text-green-600" :
+              status === "Akan Datang" ? "text-yellow-600" : "text-gray-500"
+            }`}>
+              Status: {status}
+              {timeLeft && status === "Akan Datang" && (
+                <span className="block text-yellow-600 animate-pulse"> (Mulai dalam {timeLeft})</span>
+              )}
             </p>
-            {timeLeft && (
-              <p className="text-yellow-600 text-lg font-semibold animate-pulse">
-                Sisa waktu: {timeLeft} lagi!
-              </p>
-            )}
           </div>
 
-          {isOngoing ? (
+          {status === "Sedang Berlangsung" ? (
             <a
               href={learningParty.zoom_link}
               target="_blank"
@@ -153,7 +191,7 @@ export default function PartyBelajar() {
             <div className="text-center">
               <FontAwesomeIcon icon={faCheckCircle} className="text-yellow-500 text-4xl mb-4 animate-pulse" />
               <p className="text-yellow-600 text-xl font-semibold">
-                Sesi {new Date() < new Date(learningParty.start_time) ? "akan dimulai" : "telah selesai"}. Siap-siap ya!
+                Sesi {status === "Akan Datang" ? "akan dimulai" : "telah selesai"}. Siap-siap ya!
               </p>
             </div>
           )}
