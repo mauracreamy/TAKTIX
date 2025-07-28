@@ -5,7 +5,6 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { ApexOptions } from "apexcharts";
 
-
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 interface University {
@@ -14,7 +13,6 @@ interface University {
   student_count?: number;
 }
 
-// Tipe opsional untuk legend formatter (agar tidak error)
 interface LegendFormatterOpts {
   seriesIndex: number;
 }
@@ -132,9 +130,9 @@ export default function UniversitiesChart({ universities }: { universities: Univ
       labels: {
         useSeriesColors: false,
         colors: "#1E293B",
-        formatter: (seriesName: string, opts: LegendFormatterOpts): string => {
-          return fullNames[opts.seriesIndex] || seriesName;
-        },
+      },
+      formatter: (seriesName: string, opts: LegendFormatterOpts): string => {
+        return fullNames[opts.seriesIndex] || seriesName;
       },
     },
     annotations: {
