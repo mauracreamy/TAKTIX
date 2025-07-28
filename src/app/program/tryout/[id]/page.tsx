@@ -4,8 +4,17 @@ import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter, useParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faClock, faList, faCheckCircle, faLock } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faClock, faList, faCheckCircle, faLock, faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
 import Swal from "sweetalert2";
+import { jwtDecode } from "jwt-decode";
+
+// Definisikan tipe kustom untuk JwtPayload
+interface CustomJwtPayload {
+  sub: string;
+  user?: {
+    id?: number;
+  };
+}
 
 interface Tryout {
   id: number;
@@ -29,13 +38,28 @@ export default function DetailTryout() {
   const [tryouts, setTryouts] = useState<Tryout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
-  const fetchTryouts = async () => {
+  const fetchTryouts = async (userId: number) => {
     setLoading(true);
     setError(null);
     try {
       const programId = Number(id);
       if (isNaN(programId)) throw new Error("ID program tidak valid");
+
+      // Cek registrasi user untuk program ini
+      const { data: registration, error: regError } = await supabase
+        .from("user_registrations")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("program_id", programId)
+        .single();
+      if (regError || !registration) {
+        setError("Anda belum terdaftar untuk program ini.");
+        setIsAuthorized(false);
+        return;
+      }
+      setIsAuthorized(true);
 
       const { data, error: fetchError } = await supabase
         .from("tryouts")
@@ -54,11 +78,48 @@ export default function DetailTryout() {
   };
 
   useEffect(() => {
-    if (id) fetchTryouts();
+    const token = localStorage.getItem("token");
+    if (!token || !id) {
+      Swal.fire({
+        title: "Akses Ditolak",
+        text: "Silakan login atau daftar terlebih dahulu!",
+        icon: "warning",
+        confirmButtonText: "Login",
+        confirmButtonColor: "#DC2626",
+        showCancelButton: true,
+        cancelButtonText: "Kembali",
+        cancelButtonColor: "#6B7280",
+      }).then((result) => {
+        if (result.isConfirmed) router.push("/login");
+        else router.back();
+      });
+      setLoading(false);
+      return;
+    }
+
+    const decodedToken = jwtDecode<CustomJwtPayload>(token);
+    const userId = Number(decodedToken.sub) || Number(decodedToken.user?.id);
+    if (!userId) {
+      setError("User ID tidak valid.");
+      setLoading(false);
+      return;
+    }
+
+    fetchTryouts(userId);
   }, [id]);
 
   const handleTryoutClick = (tryoutId: number) => {
-    router.push(`/program/detail_tryout/${tryoutId}`);
+    if (isAuthorized) {
+      router.push(`/program/detail_tryout/${tryoutId}`);
+    } else {
+      Swal.fire({
+        title: "Akses Ditolak",
+        text: "Anda harus terdaftar untuk mengakses tryout ini!",
+        icon: "error",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+    }
   };
 
   if (loading) {
@@ -72,11 +133,14 @@ export default function DetailTryout() {
     );
   }
 
-  if (error || tryouts.length === 0) {
+  if (error || !isAuthorized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-blue-100 p-4 sm:p-6 ml-[64px]">
         <div className="text-center">
-          <p className="text-red-600 text-xl mb-6">{error || "Tidak ada tryout aktif untuk program ini"}</p>
+          <div className="flex items-center justify-center mb-6">
+            <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-600 text-4xl mr-2 animate-pulse" />
+            <p className="text-red-600 text-xl font-semibold">{error || "Akses tidak diizinkan"}</p>
+          </div>
           <button
             onClick={() => router.back()}
             className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all duration-300 shadow-md hover:shadow-lg"
@@ -100,7 +164,7 @@ export default function DetailTryout() {
           >
             <FontAwesomeIcon icon={faArrowLeft} className="w-6 h-6 text-indigo-700" />
           </button>
-          <h1 className="ml-6 text-3xl sm:text-4xl font-bold text-indigo-900">Daftar Tryout</h1>
+          <h1 className="ml-6 text-3xl sm:text-4xl font-bold text-indigo-900 animate-fade-in">Daftar Tryout</h1>
         </div>
       </div>
 
@@ -109,11 +173,11 @@ export default function DetailTryout() {
           <div
             key={tryout.id}
             onClick={() => handleTryoutClick(tryout.id)}
-            className="cursor-pointer p-6 bg-white rounded-xl border border-stone-300 shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 overflow-hidden group"
+            className="cursor-pointer p-6 bg-white rounded-xl border border-stone-300 shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 overflow-hidden group bg-gradient-to-br from-white to-indigo-50"
           >
             <div className="flex flex-col h-full">
               <div className="mb-4">
-                <h3 className="text-xl font-semibold text-indigo-800 mb-2 line-clamp-2">{tryout.name}</h3>
+                <h3 className="text-xl font-semibold text-indigo-800 mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors duration-300">{tryout.name}</h3>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p className="flex items-center gap-2">
                     <FontAwesomeIcon icon={faList} className="text-indigo-500" />
@@ -144,7 +208,7 @@ export default function DetailTryout() {
                   e.stopPropagation();
                   handleTryoutClick(tryout.id);
                 }}
-                className="mt-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 text-sm font-medium group-hover:scale-105"
+                className="mt-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 text-sm font-medium group-hover:scale-105 animate-fade-in"
               >
                 Lihat Detail
               </button>
