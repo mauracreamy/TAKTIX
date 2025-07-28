@@ -36,6 +36,100 @@ const supabaseUrl = "https://akpkltltfwyjitbhwtne.supabase.co";
 const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrcGtsdGx0Znd5aml0Ymh3dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2NTk4NzUsImV4cCI6MjA2OTIzNTg3NX0.Kb7-L2FCCymQTbvQOksbzOCi_9twUrX0lFq9cho1WNI";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Fungsi untuk mem-parsing deskripsi dengan pemisah |
+const renderDescription = (description: string) => {
+  // Daftar kata kunci untuk teks tebal
+  const boldKeywords = ["TPS", "TWK", "TIU", "TKP", "CAT", "SKD"];
+
+  // Pisahkan deskripsi berdasarkan |
+  const parts = description.split("|").map((part) => part.trim()).filter((part) => part !== "");
+
+  // Kelompokkan subtest berdasarkan kategori
+  const groupedItems: { [key: string]: string[] } = {};
+  let intro = "";
+  let outro = "";
+
+  parts.forEach((part, index) => {
+    if (index === 0) {
+      // Bagian pertama adalah pengantar
+      intro = part;
+    } else if (index === parts.length - 1) {
+      // Bagian terakhir adalah penutup
+      outro = part;
+    } else {
+      // Bagian tengah adalah subtest
+      const [category, item] = part.split(": ").map((s) => s.trim());
+      if (!groupedItems[category]) {
+        groupedItems[category] = [];
+      }
+      groupedItems[category].push(item);
+    }
+  });
+
+  const elements: JSX.Element[] = [];
+
+  // Render pengantar
+  if (intro) {
+    let formattedIntro = intro;
+    boldKeywords.forEach((keyword) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, "g");
+      formattedIntro = formattedIntro.replace(regex, `<strong>${keyword}</strong>`);
+    });
+    elements.push(
+      <p key="intro" className="text-gray-700 mb-2">
+        <span dangerouslySetInnerHTML={{ __html: formattedIntro }} />
+      </p>
+    );
+  }
+
+  // Render subtest per kategori
+  Object.keys(groupedItems).forEach((category, catIndex) => {
+    const formattedItems = groupedItems[category].map((item, itemIndex) => {
+      let formattedItem = item;
+      boldKeywords.forEach((keyword) => {
+        const regex = new RegExp(`\\b${keyword}\\b`, "g");
+        formattedItem = formattedItem.replace(regex, `<strong>${keyword}</strong>`);
+      });
+      return (
+        <li key={`${catIndex}-${itemIndex}`} className="text-gray-700">
+          <span dangerouslySetInnerHTML={{ __html: formattedItem }} />
+        </li>
+      );
+    });
+
+    // Tambahkan subjudul kategori
+    let formattedCategory = category;
+    boldKeywords.forEach((keyword) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, "g");
+      formattedCategory = formattedCategory.replace(regex, `<strong>${keyword}</strong>`);
+    });
+    elements.push(
+      <div key={`category-${catIndex}`} className="mt-4">
+        <h4 className="text-lg font-semibold text-indigo-800">
+          <span dangerouslySetInnerHTML={{ __html: formattedCategory }} />
+        </h4>
+        <ul className="list-disc list-inside mt-2 space-y-1">{formattedItems}</ul>
+      </div>
+    );
+  });
+
+  // Render penutup
+  if (outro) {
+    let formattedOutro = outro;
+    boldKeywords.forEach((keyword) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, "g");
+      formattedOutro = formattedOutro.replace(regex, `<strong>${keyword}</strong>`);
+    });
+    elements.push(
+      <p key="outro" className="text-gray-700 mt-2">
+        <span dangerouslySetInnerHTML={{ __html: formattedOutro }} />
+      </p>
+    );
+  }
+
+  return elements;
+};
+
 export default function ProgramDetail() {
   const router = useRouter();
   const { id } = useParams();
@@ -327,17 +421,18 @@ export default function ProgramDetail() {
       </div>
 
       <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg mb-8">
-        <h3 className="text-2xl font-semibold text-indigo-800 mb-4">Deskripsi</h3>
-        <p className="text-gray-700 text-base sm:text-lg leading-relaxed">
-          {program.description}
-          <br />
-          <br />
-          <span className="font-medium">Durasi Pendampingan:</span> {program.duration}
-        </p>
+        <h3 className="text-2xl font-semibold text-indigo-800 mb-4">Tentang Program</h3>
+        <div className="text-base sm:text-lg leading-relaxed">
+          {renderDescription(program.description)}
+          
+        </div>
         <div className="mt-6">
           <h3 className="text-2xl font-semibold text-indigo-800 mb-2">Informasi</h3>
           <p className="text-gray-700 text-lg">
             Harga: <span className="font-bold text-indigo-600">Rp {program.price.toLocaleString("id-ID")}</span>
+          </p>
+          <p className="mt-4">
+            <span className="font-medium">Durasi Pendampingan:</span> {program.duration}
           </p>
         </div>
       </div>
