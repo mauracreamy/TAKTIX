@@ -137,7 +137,7 @@ export default function UniversitiesChart({ universities }: { universities: Univ
     },
     annotations: {
       texts: fullNames.map((name, index) => ({
-        x: index * (100 / (fullNames.length - 1)),
+        x: index * (100 / (fullNames.length - 1 || 1)),
         y: 0,
         text: name,
         textAnchor: "middle",
@@ -146,7 +146,7 @@ export default function UniversitiesChart({ universities }: { universities: Univ
         fontWeight: 600,
         borderWidth: 0,
         offsetY: -10,
-      })) as ApexAnnotationsText[],
+      })) as ApexAnnotations['texts'],
     },
     grid: {
       borderColor: "#E5E7EB",
