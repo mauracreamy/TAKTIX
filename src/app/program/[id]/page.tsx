@@ -24,6 +24,7 @@ interface ProgramDetail {
   duration: string;
   price: number;
   image_url: string;
+  whatsapp_link: string; // Added whatsapp_link
 }
 
 interface Tryout {
@@ -157,7 +158,7 @@ export default function ProgramDetail() {
 
       const { data: programData, error: programError } = await supabase
         .from("programs")
-        .select("id, name, description, duration, price, image_url")
+        .select("id, name, description, duration, price, image_url, whatsapp_link") // Added whatsapp_link
         .eq("id", programId)
         .single();
       if (programError) throw programError;
@@ -303,12 +304,27 @@ export default function ProgramDetail() {
   };
 
   const handleGroupKonsultasi = () => {
-    Swal.fire({
-      title: "Link Group tidak ada",
-      icon: "warning",
-      confirmButtonText: "OK",
-      confirmButtonColor: "#DC2626",
-    });
+    if (!isRegistered) {
+      Swal.fire({
+        title: "Belum Terdaftar",
+        text: "Silakan daftar terlebih dahulu dengan tiket.",
+        icon: "warning",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+      return;
+    }
+    if (program?.whatsapp_link) {
+      window.open(program.whatsapp_link, "_blank");
+    } else {
+      Swal.fire({
+        title: "Error",
+        text: "Link grup WhatsApp tidak tersedia.",
+        icon: "error",
+        confirmButtonText: "OK",
+        confirmButtonColor: "#DC2626",
+      });
+    }
   };
 
   const handlePartyBelajar = () => {
@@ -424,7 +440,6 @@ export default function ProgramDetail() {
         <h3 className="text-2xl font-semibold text-indigo-800 mb-4">Tentang Program</h3>
         <div className="text-base sm:text-lg leading-relaxed">
           {renderDescription(program.description)}
-          
         </div>
         <div className="mt-6">
           <h3 className="text-2xl font-semibold text-indigo-800 mb-2">Informasi</h3>
