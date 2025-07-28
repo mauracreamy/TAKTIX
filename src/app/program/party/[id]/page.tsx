@@ -1,14 +1,20 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams, useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faVideo, faClock, faCheckCircle, faChevronDown, faChevronUp } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faVideo, faClock, faCheckCircle, faChevronDown, faChevronUp, faLock, faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
+import Swal from "sweetalert2";
+import { jwtDecode } from "jwt-decode";
 
-const supabaseUrl = "https://akpkltltfwyjitbhwtne.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrcGtsdGx0Znd5aml0Ymh3dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2NTk4NzUsImV4cCI6MjA2OTIzNTg3NX0.Kb7-L2FCCymQTbvQOksbzOCi_9twUrX0lFq9cho1WNI";
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Definisikan tipe kustom untuk JwtPayload
+interface CustomJwtPayload {
+  sub: string;
+  user?: {
+    id?: number;
+  };
+}
 
 interface LearningParty {
   id: number;
@@ -19,6 +25,10 @@ interface LearningParty {
   description: string | null;
 }
 
+const supabaseUrl = "https://akpkltltfwyjitbhwtne.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrcGtsdGx0Znd5aml0Ymh3dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2NTk4NzUsImV4cCI6MjA2OTIzNTg3NX0.Kb7-L2FCCymQTbvQOksbzOCi_9twUrX0lFq9cho1WNI";
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 export default function PartyBelajar() {
   const router = useRouter();
   const { id } = useParams();
@@ -26,13 +36,28 @@ export default function PartyBelajar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false); // State for expand/collapse
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
-  const fetchLearningParties = async () => {
+  const fetchLearningParties = async (userId: number) => {
     setLoading(true);
     setError(null);
     try {
       const programId = Number(id);
       if (isNaN(programId)) throw new Error("ID program tidak valid");
+
+      // Cek registrasi user untuk program ini
+      const { data: registration, error: regError } = await supabase
+        .from("user_registrations")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("program_id", programId)
+        .single();
+      if (regError || !registration) {
+        setError("Anda belum terdaftar untuk program ini.");
+        setIsAuthorized(false);
+        return;
+      }
+      setIsAuthorized(true);
 
       const { data, error } = await supabase
         .from("learning_parties")
@@ -52,7 +77,34 @@ export default function PartyBelajar() {
   };
 
   useEffect(() => {
-    if (id) fetchLearningParties();
+    const token = localStorage.getItem("token");
+    if (!token || !id) {
+      Swal.fire({
+        title: "Akses Ditolak",
+        text: "Silakan login atau daftar terlebih dahulu!",
+        icon: "warning",
+        confirmButtonText: "Login",
+        confirmButtonColor: "#DC2626",
+        showCancelButton: true,
+        cancelButtonText: "Kembali",
+        cancelButtonColor: "#6B7280",
+      }).then((result) => {
+        if (result.isConfirmed) router.push("/login");
+        else router.back();
+      });
+      setLoading(false);
+      return;
+    }
+
+    const decodedToken = jwtDecode<CustomJwtPayload>(token);
+    const userId = Number(decodedToken.sub) || Number(decodedToken.user?.id);
+    if (!userId) {
+      setError("User ID tidak valid.");
+      setLoading(false);
+      return;
+    }
+
+    fetchLearningParties(userId);
   }, [id]);
 
   // Format date (e.g., "Senin, 28 Juli 2025")
@@ -123,11 +175,14 @@ export default function PartyBelajar() {
     );
   }
 
-  if (error) {
+  if (error || !isAuthorized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-200 to-blue-100 p-4 sm:p-6 ml-[64px]">
         <div className="text-center">
-          <p className="text-red-600 text-2xl mb-8 font-semibold">{error}</p>
+          <div className="flex items-center justify-center mb-6">
+            <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-600 text-4xl mr-2 animate-pulse" />
+            <p className="text-red-600 text-2xl font-semibold">{error || "Akses tidak diizinkan"}</p>
+          </div>
           <button
             onClick={() => router.back()}
             className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-all duration-300 transform hover:scale-105"
