@@ -1,3 +1,4 @@
+```tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -21,71 +22,71 @@ interface LearningParty {
 export default function PartyBelajar() {
   const router = useRouter();
   const { id } = useParams();
-  const [learningParty, setLearningParty] = useState<LearningParty | null>(null);
+  const [learningParties, setLearningParties] = useState<LearningParty[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("");
+
+  const fetchLearningParties = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const programId = Number(id);
+      if (isNaN(programId)) throw new Error("ID program tidak valid");
+
+      const { data, error } = await supabase
+        .from("learning_parties")
+        .select("id, zoom_link, start_time, end_time, is_active")
+        .eq("program_id", programId)
+        .eq("is_active", true)
+        .order("start_time", { ascending: true });
+      if (error) throw error;
+      setLearningParties(data as LearningParty[]);
+    } catch (err) {
+      setError("Gagal memuat data Party Belajar: " + (err as Error).message);
+      console.error("Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchLearningParty = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const programId = Number(id);
-        if (isNaN(programId)) throw new Error("ID program tidak valid");
-
-        const { data, error } = await supabase
-          .from("learning_parties")
-          .select("id, zoom_link, start_time, end_time, is_active")
-          .eq("program_id", programId)
-          .eq("is_active", true)
-          .order("start_time", { ascending: true })
-          .maybeSingle();
-        if (error) throw error;
-        setLearningParty(data as LearningParty);
-
-        // Update status dan countdown
-        if (data) {
-          const now = new Date();
-          const start = new Date(data.start_time);
-          const end = new Date(data.end_time);
-
-          if (now < start) {
-            setStatus("Akan Datang");
-            const updateTimer = () => {
-              const diff = start.getTime() - new Date().getTime();
-              if (diff <= 0) {
-                setTimeLeft(null);
-                setStatus("Sedang Berlangsung");
-                return;
-              }
-              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-              const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-              const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-              setTimeLeft(
-                `${days > 0 ? days + " hari, " : ""}${hours > 0 ? hours + " jam, " : ""}${minutes} menit lagi`
-              );
-            };
-            updateTimer();
-            const timer = setInterval(updateTimer, 60000);
-            return () => clearInterval(timer);
-          } else if (now >= start && now <= end) {
-            setStatus("Sedang Berlangsung");
-          } else {
-            setStatus("Selesai");
-          }
-        }
-      } catch (err) {
-        setError("Gagal memuat data Party Belajar: " + (err as Error).message);
-        console.error("Error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (id) fetchLearningParty();
+    if (id) fetchLearningParties();
   }, [id]);
+
+  const formatDateTime = (date: string) => {
+    return new Date(date).toLocaleString("id-ID", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getPartyStatus = (party: LearningParty) => {
+    const now = new Date();
+    const start = new Date(party.start_time);
+    const end = new Date(party.end_time);
+    let status = "";
+    let timeLeft: string | null = null;
+
+    if (now < start) {
+      status = "Akan Datang";
+      const diff = start.getTime() - now.getTime();
+      if (diff > 0) {
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        timeLeft = `${days > 0 ? days + " hari, " : ""}${hours > 0 ? hours + " jam, " : ""}${minutes} menit lagi`;
+      }
+    } else if (now >= start && now <= end) {
+      status = "Sedang Berlangsung";
+    } else {
+      status = "Selesai";
+    }
+    return { status, timeLeft };
+  };
 
   if (loading) {
     return (
@@ -98,11 +99,11 @@ export default function PartyBelajar() {
     );
   }
 
-  if (error || !learningParty) {
+  if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-200 to-blue-100 p-4 sm:p-6 ml-[64px]">
         <div className="text-center">
-          <p className="text-red-600 text-2xl mb-8 font-semibold">{error || "Party Belajar tidak ditemukan"}</p>
+          <p className="text-red-600 text-2xl mb-8 font-semibold">{error}</p>
           <button
             onClick={() => router.back()}
             className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-all duration-300 transform hover:scale-105"
@@ -114,17 +115,6 @@ export default function PartyBelajar() {
       </div>
     );
   }
-
-  const formatDateTime = (date: string) => {
-    return new Date(date).toLocaleString("id-ID", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-200 to-blue-100 p-4 sm:p-6 ml-[64px] overflow-hidden">
@@ -149,49 +139,70 @@ export default function PartyBelajar() {
             <p className="text-gray-600 text-lg">Ayo gabung dan selesaikan soal bareng temen!</p>
           </div>
 
-          <div className="bg-gradient-to-br from-yellow-100 to-green-100 p-4 sm:p-6 rounded-xl mb-6 border border-green-200 shadow-inner">
-            <div className="flex items-center gap-2 mb-2">
-              <FontAwesomeIcon icon={faClock} className="text-yellow-500" />
-              <h3 className="text-lg font-semibold text-gray-700">Jadwal Sesi</h3>
+          {learningParties.length > 0 ? (
+            <div className="grid gap-4">
+              {learningParties.map((party) => {
+                const { status, timeLeft } = getPartyStatus(party);
+                return (
+                  <div
+                    key={party.id}
+                    className="bg-gradient-to-br from-yellow-100 to-green-100 p-4 rounded-xl border border-green-200 shadow-inner"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <FontAwesomeIcon icon={faClock} className="text-yellow-500" />
+                      <h4 className="text-lg font-semibold text-gray-700">Sesi Party Belajar</h4>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <p className="text-gray-600">
+                        <strong>Mulai:</strong> {formatDateTime(party.start_time)}
+                      </p>
+                      <p className="text-gray-600">
+                        <strong>Selesai:</strong> {formatDateTime(party.end_time)}
+                      </p>
+                    </div>
+                    <p
+                      className={`text-lg font-semibold mt-4 ${
+                        status === "Sedang Berlangsung"
+                          ? "text-green-600"
+                          : status === "Akan Datang"
+                          ? "text-yellow-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      Status: {status}
+                      {timeLeft && status === "Akan Datang" && (
+                        <span className="block text-yellow-600 animate-pulse">
+                          (Mulai dalam {timeLeft})
+                        </span>
+                      )}
+                    </p>
+                    {status === "Sedang Berlangsung" ? (
+                      <a
+                        href={party.zoom_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full sm:w-auto mx-auto mt-4 px-8 py-4 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-full text-xl font-bold shadow-lg hover:from-green-600 hover:to-teal-600 transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-2 animate-bounce-slow"
+                      >
+                        <FontAwesomeIcon icon={faVideo} className="w-5 h-5" />
+                        Gabung Zoom Sekarang!
+                      </a>
+                    ) : (
+                      <div className="text-center mt-4">
+                        <FontAwesomeIcon icon={faCheckCircle} className="text-yellow-500 text-4xl mb-4 animate-pulse" />
+                        <p className="text-yellow-600 text-xl font-semibold">
+                          Sesi {status === "Akan Datang" ? "akan dimulai" : "telah selesai"}. Siap-siap ya!
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <p className="text-gray-600">
-                  <strong>Mulai:</strong> {formatDateTime(learningParty.start_time)}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-600">
-                  <strong>Selesai:</strong> {formatDateTime(learningParty.end_time)}
-                </p>
-              </div>
-            </div>
-            <p className={`text-lg font-semibold mt-4 ${
-              status === "Sedang Berlangsung" ? "text-green-600" :
-              status === "Akan Datang" ? "text-yellow-600" : "text-gray-500"
-            }`}>
-              Status: {status}
-              {timeLeft && status === "Akan Datang" && (
-                <span className="block text-yellow-600 animate-pulse"> (Mulai dalam {timeLeft})</span>
-              )}
-            </p>
-          </div>
-
-          {status === "Sedang Berlangsung" ? (
-            <a
-              href={learningParty.zoom_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full sm:w-auto mx-auto px-8 py-4 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-full text-xl font-bold shadow-lg hover:from-green-600 hover:to-teal-600 transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-2 animate-bounce-slow"
-            >
-              <FontAwesomeIcon icon={faVideo} className="w-5 h-5" />
-              Gabung Zoom Sekarang!
-            </a>
           ) : (
             <div className="text-center">
               <FontAwesomeIcon icon={faCheckCircle} className="text-yellow-500 text-4xl mb-4 animate-pulse" />
               <p className="text-yellow-600 text-xl font-semibold">
-                Sesi {status === "Akan Datang" ? "akan dimulai" : "telah selesai"}. Siap-siap ya!
+                Belum ada jadwal Party Belajar untuk program ini.
               </p>
             </div>
           )}
@@ -200,3 +211,4 @@ export default function PartyBelajar() {
     </div>
   );
 }
+```
