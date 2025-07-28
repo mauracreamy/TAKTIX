@@ -21,16 +21,17 @@ interface CustomJwtPayload {
 
 // Definisikan tipe untuk data attempt
 interface AttemptItem {
-  attempt_number: number | null;
+  attempt_number: number;
 }
 
+// Definisikan tipe untuk hasil soal
 interface QuestionResult {
   id: number;
   question_text: string;
   user_answer: string | null;
   correct_answer: string;
   test_category: string;
-  difficulty?: number; // Parameter kesulitan item (b) untuk IRT
+  difficulty: number;
 }
 
 const supabaseUrl = "https://akpkltltfwyjitbhwtne.supabase.co";
@@ -51,35 +52,35 @@ export default function NilaiTryout() {
   const [attempts, setAttempts] = useState<number[]>([]);
 
   // Fungsi untuk menghitung probabilitas jawaban benar berdasarkan model 1PL Rasch
-  const calculateProbability = (theta: number, difficulty: number) => {
+  const calculateProbability = (theta: number, difficulty: number): number => {
     return 1 / (1 + Math.exp(-(theta - difficulty)));
   };
 
   // Fungsi untuk menghitung skor IRT per subtest
-  const calculateIRTScore = (results: QuestionResult[], subtest: string) => {
+  const calculateIRTScore = (results: QuestionResult[], subtest: string): number => {
     const subtestResults = results.filter((r) => r.test_category === subtest);
     if (subtestResults.length === 0) return 0;
 
-    // Asumsi theta (kemampuan peserta) dihitung sederhana berdasarkan jumlah jawaban benar
-    const correctCount = subtestResults.filter(
-      (r) => r.user_answer === r.correct_answer
-    ).length;
+    // Hitung jumlah jawaban benar
+    const correctCount = subtestResults.filter((r) => r.user_answer === r.correct_answer).length;
     const totalQuestions = subtestResults.length;
-    const theta = Math.log(correctCount / (totalQuestions - correctCount + 0.5)); // Hindari pembagian nol
+
+    // Hitung theta (kemampuan peserta) dengan penanganan pembagian nol
+    const theta = correctCount === 0 ? -2 : Math.log((correctCount + 0.5) / (totalQuestions - correctCount + 0.5));
 
     // Hitung total probabilitas untuk jawaban benar
     let totalProbability = 0;
     subtestResults.forEach((result) => {
-      const difficulty = result.difficulty ?? (Math.random() * 4 - 2); // Dummy difficulty [-2, 2]
+      const difficulty = result.difficulty ?? 0; // Fallback ke 0 jika difficulty tidak tersedia
       if (result.user_answer === result.correct_answer) {
         totalProbability += calculateProbability(theta, difficulty);
       }
     });
 
     // Skalakan ke 0-1000
-    const maxProbability = subtestResults.length; // Maksimum probabilitas jika semua benar
+    const maxProbability = subtestResults.length;
     const scaledScore = (totalProbability / maxProbability) * 1000;
-    return Math.round(scaledScore);
+    return Math.round(scaledScore) || 0;
   };
 
   useEffect(() => {
@@ -104,14 +105,18 @@ export default function NilaiTryout() {
         .eq("tryout_id", id)
         .eq("attempt_number", attempt)
         .single();
-      if (error) throw error;
+
+      if (error || !data) {
+        throw new Error("Data skor tidak ditemukan");
+      }
+
       setScoreData(data);
-    } catch (err) {
-      console.error("Error fetching score:", err);
+    } catch (err: any) {
+      console.error("Error fetching score:", err.message);
       Swal.fire({
         icon: "error",
         title: "Oops...",
-        text: "Gagal memuat nilai!",
+        text: `Gagal memuat nilai: ${err.message}`,
       });
     } finally {
       setLoading(false);
@@ -131,101 +136,106 @@ export default function NilaiTryout() {
         .select("attempt_number")
         .eq("user_id", userId)
         .eq("tryout_id", id);
+
       if (error) throw error;
 
-      const attemptNumbers = data.map((item: AttemptItem) => item.attempt_number);
-      const filteredNumbers = attemptNumbers.filter((num): num is number => num !== null);
-      const uniqueAttempts = Array.from(new Set<number>(filteredNumbers)).sort((a, b) => a - b);
+      const attemptNumbers = data
+        .map((item: AttemptItem) => item.attempt_number)
+        .filter((num): num is number => typeof num === "number");
+      const uniqueAttempts = Array.from(new Set<number>(attemptNumbers)).sort((a, b) => a - b);
 
       setAttempts(uniqueAttempts);
-    } catch (err) {
-      console.error("Error fetching attempts:", err);
+    } catch (err: any) {
+      console.error("Error fetching attempts:", err.message);
     }
   };
 
-const fetchQuestionResults = async () => {
-  try {
-    const token = localStorage.getItem("token");
-    if (!token) throw new Error("Token tidak ditemukan");
+  const fetchQuestionResults = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Token tidak ditemukan");
 
-    const decodedToken = jwtDecode<CustomJwtPayload>(token);
-    const userId = decodedToken.user.id;
+      const decodedToken = jwtDecode<CustomJwtPayload>(token);
+      const userId = decodedToken.user.id;
 
-    // Ambil hasil jawaban user
-    const { data, error } = await supabase
-      .from("user_tryout_results")
-      .select("question_id, user_answer, correct_answer")
-      .eq("user_id", userId)
-      .eq("tryout_id", id)
-      .eq("attempt_number", attempt)
-      .order("question_id");
+      // Ambil hasil jawaban user
+      const { data: resultsData, error: resultsError } = await supabase
+        .from("user_tryout_results")
+        .select("question_id, user_answer, correct_answer")
+        .eq("user_id", userId)
+        .eq("tryout_id", id)
+        .eq("attempt_number", attempt)
+        .order("question_id");
 
-    if (error) throw error;
+      if (resultsError) throw new Error(`Gagal mengambil hasil jawaban: ${resultsError.message}`);
+      if (!resultsData || resultsData.length === 0) throw new Error("Tidak ada hasil jawaban untuk attempt ini");
 
-    // Pastikan question_id array valid (number[])
-    const questionIds: number[] = data
-      .map((item) => item.question_id)
-      .filter((id): id is number => typeof id === "number");
+      // Pastikan question_id array valid
+      const questionIds: number[] = resultsData
+        .map((item) => item.question_id)
+        .filter((id): id is number => typeof id === "number");
 
-    // Ambil data soal dari tabel questions, termasuk difficulty
-    const { data: questions, error: questionError } = await supabase
-      .from("questions")
-      .select("id, question_text, test_category, difficulty")
-      .in("id", questionIds);
+      // Ambil data soal dari tabel questions
+      const { data: questionsData, error: questionError } = await supabase
+        .from("questions")
+        .select("id, question_text, test_category, difficulty")
+        .in("id", questionIds);
 
-    if (questionError) throw questionError;
+      if (questionError) throw new Error(`Gagal mengambil data soal: ${questionError.message}`);
+      if (!questionsData || questionsData.length === 0) throw new Error("Tidak ada data soal ditemukan");
 
-    // Gabungkan hasil jawaban dengan data soal
-    const results: QuestionResult[] = data.map((result) => {
-      const question = questions.find((q) => q.id === result.question_id);
-      return {
-        id: result.question_id,
-        question_text: question?.question_text || "Soal tidak ditemukan",
-        user_answer: result.user_answer,
-        correct_answer: result.correct_answer,
-        test_category: question?.test_category || "Unknown",
-        difficulty: question?.difficulty ?? (Math.random() * 4 - 2), // Dummy difficulty jika kosong
-      };
-    });
+      // Gabungkan hasil jawaban dengan data soal
+      const results: QuestionResult[] = resultsData.map((result) => {
+        const question = questionsData.find((q) => q.id === result.question_id);
+        return {
+          id: result.question_id,
+          question_text: question?.question_text || "Soal tidak ditemukan",
+          user_answer: result.user_answer,
+          correct_answer: result.correct_answer,
+          test_category: question?.test_category || "Unknown",
+          difficulty: question?.difficulty ?? 0, // Fallback ke 0
+        };
+      });
 
-    // Subtest yang dihitung
-    const subtests = [
-      "Penalaran Umum",
-      "Pengetahuan dan Pemahaman Umum",
-      "Pemahaman Bacaan dan Menulis",
-      "Pengetahuan Kuantitatif",
-      "Literasi Bahasa Indonesia",
-      "Literasi Bahasa Inggris",
-      "Penalaran Matematika",
-    ];
+      // Subtest yang dihitung
+      const subtests = [
+        "Penalaran Umum",
+        "Pengetahuan dan Pemahaman Umum",
+        "Pemahaman Bacaan dan Menulis",
+        "Pengetahuan Kuantitatif",
+        "Literasi Bahasa Indonesia",
+        "Literasi Bahasa Inggris",
+        "Penalaran Matematika",
+      ];
 
-    // Hitung skor per subtest
-    const categoryScores: Record<string, number> = {};
-    subtests.forEach((subtest) => {
-      categoryScores[subtest] = calculateIRTScore(results, subtest);
-    });
+      // Hitung skor per subtest
+      const categoryScores: Record<string, number> = {};
+      subtests.forEach((subtest) => {
+        categoryScores[subtest] = calculateIRTScore(results, subtest);
+      });
 
-    // Hitung skor keseluruhan sebagai rata-rata dari semua subtest
-    const overallScore =
-      subtests.reduce((sum, subtest) => sum + (categoryScores[subtest] || 0), 0) /
-      subtests.length;
+      // Hitung skor keseluruhan sebagai rata-rata dari semua subtest
+      const validScores = subtests
+        .map((subtest) => categoryScores[subtest] || 0)
+        .filter((score) => score > 0);
+      const overallScore = validScores.length > 0 ? validScores.reduce((sum, score) => sum + score, 0) / validScores.length : 0;
 
-    // Simpan hasil ke state
-    setScoreData({
-      overall_score: Math.round(overallScore),
-      category_scores: categoryScores,
-    });
-    setQuestionResults(results);
-  } catch (err) {
-    console.error("Error fetching question results:", err);
-    Swal.fire({
-      icon: "error",
-      title: "Oops...",
-      text: "Gagal memuat hasil jawaban!",
-    });
-  }
-};
-
+      // Simpan hasil ke state
+      setScoreData({
+        overall_score: Math.round(overallScore),
+        category_scores: categoryScores,
+      });
+      setQuestionResults(results);
+    } catch (err: any) {
+      console.error("Error fetching question results:", err.message);
+      Swal.fire({
+        icon: "error",
+        title: "Oops...",
+        text: `Gagal memuat hasil jawaban: ${err.message}`,
+      });
+      setQuestionResults([]);
+    }
+  };
 
   const handleChangeAttempt = (newAttempt: number) => {
     router.push(`/program/nilai/${id}?attempt=${newAttempt}`);
@@ -239,7 +249,7 @@ const fetchQuestionResults = async () => {
     );
   }
 
-  if (!scoreData) {
+  if (!scoreData || !questionResults.length) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100">
         <div className="text-center">
