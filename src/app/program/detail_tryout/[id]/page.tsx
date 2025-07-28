@@ -4,8 +4,19 @@ import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faClock, faList, faCheckCircle, faLock } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faClock, faList, faCheckCircle, faLock, faExclamationTriangle } from "@fortawesome/free-solid-svg-icons";
 import Swal from "sweetalert2";
+import { jwtDecode } from "jwt-decode";
+
+// Definisikan tipe kustom untuk JwtPayload
+interface CustomJwtPayload {
+  sub: string;
+  user?: {
+    id?: number;
+    photo_profile?: string;
+    name?: string;
+  };
+}
 
 interface Tryout {
   id: number;
@@ -31,48 +42,84 @@ export default function DetailTryout() {
   const [name, setName] = useState("");
   const [photoProfile, setPhotoProfile] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      try {
-        const decoded: any = JSON.parse(atob(token.split('.')[1]));
-        const user = decoded.user || {};
-        setPhotoProfile(user.photo_profile || "");
-      } catch (error) {
-        console.error("Invalid token:", error);
-        setName("");
-        setPhotoProfile("");
-      }
-    }
-    fetchTryoutDetail();
-  }, [id]);
-
-  const fetchTryoutDetail = async () => {
+  const fetchTryoutDetail = async (userId: number) => {
     setLoading(true);
+    setError(null);
     try {
       const tryoutId = Number(id);
       if (isNaN(tryoutId)) throw new Error("ID tryout tidak valid");
 
-      const { data, error } = await supabase
+      // Dapatkan program_id dari tryout
+      const { data: tryoutData, error: tryoutError } = await supabase
         .from("tryouts")
         .select("id, name, is_active, program_id, created_at, total_questions, duration_minutes, exam_category, is_free, price")
         .eq("id", tryoutId)
         .single();
-      if (error) throw error;
-      setTryout(data);
+      if (tryoutError) throw tryoutError;
+      setTryout(tryoutData);
+
+      // Cek registrasi user untuk program terkait tryout
+      const { data: registration, error: regError } = await supabase
+        .from("user_registrations")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("program_id", tryoutData.program_id)
+        .single();
+      if (regError || !registration) {
+        setError("Anda belum terdaftar untuk program ini.");
+        setIsAuthorized(false);
+        return;
+      }
+      setIsAuthorized(true);
     } catch (err) {
+      setError("Gagal memuat detail tryout: " + (err as Error).message);
       console.error("Error fetching tryout detail:", err);
-      Swal.fire({
-        icon: "error",
-        title: "Oops...",
-        text: "Gagal memuat detail tryout!",
-        confirmButtonColor: "#4B5EFC",
-      });
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token || !id) {
+      Swal.fire({
+        title: "Akses Ditolak",
+        text: "Silakan login atau daftar terlebih dahulu!",
+        icon: "warning",
+        confirmButtonText: "Login",
+        confirmButtonColor: "#DC2626",
+        showCancelButton: true,
+        cancelButtonText: "Kembali",
+        cancelButtonColor: "#6B7280",
+      }).then((result) => {
+        if (result.isConfirmed) router.push("/login");
+        else router.back();
+      });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const decoded = jwtDecode<CustomJwtPayload>(token);
+      const user = decoded.user || {};
+      setPhotoProfile(user.photo_profile || "");
+      const userId = Number(decoded.sub) || Number(user.id);
+      if (!userId) {
+        setError("User ID tidak valid.");
+        setLoading(false);
+        return;
+      }
+      fetchTryoutDetail(userId);
+    } catch (error) {
+      console.error("Invalid token:", error);
+      setName("");
+      setPhotoProfile("");
+      setLoading(false);
+    }
+  }, [id]);
 
   if (loading) {
     return (
@@ -85,14 +132,17 @@ export default function DetailTryout() {
     );
   }
 
-  if (!tryout) {
+  if (error || !isAuthorized || !tryout) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-purple-100 to-indigo-100">
         <div className="text-center">
-          <span className="text-xl text-red-600 font-semibold">Tryout tidak ditemukan</span>
+          <div className="flex items-center justify-center mb-6">
+            <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-600 text-4xl mr-2 animate-pulse" />
+            <p className="text-red-600 text-2xl font-semibold">{error || "Akses tidak diizinkan"}</p>
+          </div>
           <button
             onClick={() => router.back()}
-            className="mt-4 px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all duration-300 transform hover:scale-105"
+            className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 transform hover:scale-105"
           >
             Kembali
           </button>
