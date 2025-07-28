@@ -1,11 +1,10 @@
-
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams, useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faVideo, faClock, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faVideo, faClock, faCheckCircle, faChevronDown, faChevronUp } from "@fortawesome/free-solid-svg-icons";
 
 const supabaseUrl = "https://akpkltltfwyjitbhwtne.supabase.co";
 const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrcGtsdGx0Znd5aml0Ymh3dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2NTk4NzUsImV4cCI6MjA2OTIzNTg3NX0.Kb7-L2FCCymQTbvQOksbzOCi_9twUrX0lFq9cho1WNI";
@@ -26,6 +25,7 @@ export default function PartyBelajar() {
   const [learningParties, setLearningParties] = useState<LearningParty[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false); // State for expand/collapse
 
   const fetchLearningParties = async () => {
     setLoading(true);
@@ -102,6 +102,16 @@ export default function PartyBelajar() {
     return { status, timeLeft };
   };
 
+  // Split parties into active and completed
+  const activeParties = learningParties.filter((party) => {
+    const { status } = getPartyStatus(party);
+    return status === "Akan Datang" || status === "Sedang Berlangsung";
+  });
+  const completedParties = learningParties.filter((party) => {
+    const { status } = getPartyStatus(party);
+    return status === "Selesai";
+  });
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-indigo-100 via-purple-200 to-blue-100 animate-pulse">
@@ -153,9 +163,9 @@ export default function PartyBelajar() {
             <p className="text-gray-600 text-lg">Ayo gabung dan selesaikan soal bareng temen!</p>
           </div>
 
-          {learningParties.length > 0 ? (
+          {activeParties.length > 0 ? (
             <div className="grid gap-4">
-              {learningParties.map((party) => {
+              {activeParties.map((party) => {
                 const { status, timeLeft } = getPartyStatus(party);
                 return (
                   <div
@@ -177,11 +187,7 @@ export default function PartyBelajar() {
                     </p>
                     <p
                       className={`text-lg font-semibold mt-4 ${
-                        status === "Sedang Berlangsung"
-                          ? "text-green-600"
-                          : status === "Akan Datang"
-                          ? "text-yellow-600"
-                          : "text-gray-500"
+                        status === "Sedang Berlangsung" ? "text-green-600" : "text-yellow-600"
                       }`}
                     >
                       Status: {status}
@@ -204,9 +210,7 @@ export default function PartyBelajar() {
                     ) : (
                       <div className="text-center mt-4">
                         <FontAwesomeIcon icon={faCheckCircle} className="text-yellow-500 text-4xl mb-4 animate-pulse" />
-                        <p className="text-yellow-600 text-xl font-semibold">
-                          Sesi {status === "Akan Datang" ? "akan dimulai" : "telah selesai"}. Siap-siap ya!
-                        </p>
+                        <p className="text-yellow-600 text-xl font-semibold">Sesi akan dimulai. Siap-siap ya!</p>
                       </div>
                     )}
                   </div>
@@ -217,8 +221,46 @@ export default function PartyBelajar() {
             <div className="text-center">
               <FontAwesomeIcon icon={faCheckCircle} className="text-yellow-500 text-4xl mb-4 animate-pulse" />
               <p className="text-yellow-600 text-xl font-semibold">
-                Belum ada jadwal Party Belajar untuk program ini.
+                Belum ada jadwal Party Belajar aktif untuk program ini.
               </p>
+            </div>
+          )}
+
+          {completedParties.length > 0 && (
+            <div className="mt-8">
+              <button
+                type="button"
+                onClick={() => setShowCompleted(!showCompleted)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-all duration-300 w-full sm:w-auto"
+              >
+                <FontAwesomeIcon icon={showCompleted ? faChevronUp : faChevronDown} className="w-5 h-5" />
+                <span className="font-medium">Sesi Selesai ({completedParties.length})</span>
+              </button>
+              {showCompleted && (
+                <div className="grid gap-4 mt-4">
+                  {completedParties.map((party) => (
+                    <div
+                      key={party.id}
+                      className="bg-gradient-to-br from-gray-100 to-gray-200 p-4 rounded-xl border border-gray-300 shadow-inner"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <FontAwesomeIcon icon={faClock} className="text-gray-500" />
+                        <h4 className="text-lg font-semibold text-gray-700">Sesi Party Belajar</h4>
+                      </div>
+                      <p className="text-gray-600">
+                        <strong>Tanggal:</strong> {formatDate(party.start_time)}
+                      </p>
+                      <p className="text-gray-600 mt-2">
+                        <strong>Waktu:</strong> {formatTimeRange(party.start_time, party.end_time)}
+                      </p>
+                      <p className="text-gray-600 mt-2">
+                        <strong>Deskripsi:</strong> {party.description || "Tidak ada deskripsi tersedia"}
+                      </p>
+                      <p className="text-lg font-semibold mt-4 text-gray-500">Status: Selesai</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
