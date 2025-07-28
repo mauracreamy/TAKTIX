@@ -43,12 +43,23 @@ interface AttemptData {
   attempt_number: number;
 }
 
+// Tipe untuk categoryTotals
+interface CategoryTotal {
+  correct: number;
+  total: number;
+}
+
+// Tipe untuk categoryScores
+interface CategoryScores {
+  [key: string]: number;
+}
+
 const supabaseUrl = "https://akpkltltfwyjitbhwtne.supabase.co";
 const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrcGtsdGx0Znd5aml0Ymh3dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2NTk4NzUsImV4cCI6MjA2OTIzNTg3NX0.Kb7-L2FCCymQTbvQOksbzOCi_9twUrX0lFq9cho1WNI";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Konfigurasi durasi per subtest (dalam menit)
-const subtestDurations = {
+const subtestDurations: { [key: string]: number } = {
   "Penalaran Umum": 30,
   "Pengetahuan dan Pemahaman Umum": 15,
   "Pemahaman Bacaan dan Menulis": 25,
@@ -93,18 +104,18 @@ export default function KerjakanTryout() {
         .select("id, tryout_id, question_text, option_a, option_b, option_c, option_d, correct_answer, test_category")
         .eq("tryout_id", tryoutId);
       if (error) throw error;
-      if (!data || data.length === 0) throw new Error("No questions found");
+      if (!data || data.length === 0) throw new Error("Tidak ada soal yang ditemukan");
       setQuestions(data);
 
       const firstSubtest = data[0]?.test_category || "";
       setCurrentSubtest(firstSubtest);
       updateSubtest(firstSubtest, data);
     } catch (err) {
-      console.error("Error fetching tryout or questions:", err);
+      console.error("Error saat mengambil tryout atau soal:", err);
       Swal.fire({
         icon: "error",
         title: "Oops...",
-        text: err.message || "Gagal memuat tryout atau soal!",
+        text: err instanceof Error ? err.message : "Gagal memuat tryout atau soal!",
         confirmButtonColor: "#4B5EFC",
       });
     } finally {
@@ -113,7 +124,7 @@ export default function KerjakanTryout() {
   };
 
   const updateSubtest = (subtest: string, allQuestions: Question[]) => {
-    const subtestQs = allQuestions.filter(q => q.test_category === subtest);
+    const subtestQs = allQuestions.filter((q) => q.test_category === subtest);
     setSubtestQuestions(subtestQs);
     const durationInMinutes = subtestDurations[subtest] || 0;
     const durationInSeconds = Math.round(durationInMinutes * 60);
@@ -139,12 +150,10 @@ export default function KerjakanTryout() {
 
   const handleAnswerSelect = (questionId: number, answer: string) => {
     setAnswers((prev) => {
-      // Jika jawaban yang sama diklik lagi, hapus jawaban
       if (prev[questionId] === answer) {
         const { [questionId]: _, ...newAnswers } = prev;
         return newAnswers;
       }
-      // Jika jawaban berbeda atau belum ada, simpan jawaban baru
       return {
         ...prev,
         [questionId]: answer,
@@ -192,14 +201,14 @@ export default function KerjakanTryout() {
   };
 
   const calculateCategoryScores = (questions: Question[], answers: Record<number, string>) => {
-    const categoryTotals = {
-      "Penalaran Umum": { correct: 0, total: questions.filter(q => q.test_category === "Penalaran Umum").length || 30 },
-      "Pengetahuan dan Pemahaman Umum": { correct: 0, total: questions.filter(q => q.test_category === "Pengetahuan dan Pemahaman Umum").length || 20 },
-      "Pemahaman Bacaan dan Menulis": { correct: 0, total: questions.filter(q => q.test_category === "Pemahaman Bacaan dan Menulis").length || 20 },
-      "Pengetahuan Kuantitatif": { correct: 0, total: questions.filter(q => q.test_category === "Pengetahuan Kuantitatif").length || 20 },
-      "Literasi Bahasa Indonesia": { correct: 0, total: questions.filter(q => q.test_category === "Literasi Bahasa Indonesia").length || 30 },
-      "Literasi Bahasa Inggris": { correct: 0, total: questions.filter(q => q.test_category === "Literasi Bahasa Inggris").length || 20 },
-      "Penalaran Matematika": { correct: 0, total: questions.filter(q => q.test_category === "Penalaran Matematika").length || 20 },
+    const categoryTotals: { [key: string]: CategoryTotal } = {
+      "Penalaran Umum": { correct: 0, total: questions.filter((q) => q.test_category === "Penalaran Umum").length || 30 },
+      "Pengetahuan dan Pemahaman Umum": { correct: 0, total: questions.filter((q) => q.test_category === "Pengetahuan dan Pemahaman Umum").length || 20 },
+      "Pemahaman Bacaan dan Menulis": { correct: 0, total: questions.filter((q) => q.test_category === "Pemahaman Bacaan dan Menulis").length || 20 },
+      "Pengetahuan Kuantitatif": { correct: 0, total: questions.filter((q) => q.test_category === "Pengetahuan Kuantitatif").length || 20 },
+      "Literasi Bahasa Indonesia": { correct: 0, total: questions.filter((q) => q.test_category === "Literasi Bahasa Indonesia").length || 30 },
+      "Literasi Bahasa Inggris": { correct: 0, total: questions.filter((q) => q.test_category === "Literasi Bahasa Inggris").length || 20 },
+      "Penalaran Matematika": { correct: 0, total: questions.filter((q) => q.test_category === "Penalaran Matematika").length || 20 },
     };
 
     questions.forEach((q) => {
@@ -208,15 +217,16 @@ export default function KerjakanTryout() {
       if (isCorrect) categoryTotals[q.test_category].correct += 1;
     });
 
-    const categoryScores = {};
+    const categoryScores: CategoryScores = {};
     for (let category in categoryTotals) {
       const { correct, total } = categoryTotals[category];
-      const percentage = (correct / total) * 100;
+      const percentage = total > 0 ? (correct / total) * 100 : 0;
       categoryScores[category] = Math.round((percentage / 100) * 1000);
     }
 
     const overallScore = Math.round(
-      Object.values(categoryScores).reduce((sum: number, score: number) => sum + score, 0) / Object.keys(categoryScores).length
+      Object.values(categoryScores).reduce((sum: number, score: number) => sum + score, 0) /
+        (Object.keys(categoryScores).length || 1)
     );
 
     return { categoryScores, overallScore };
@@ -297,11 +307,11 @@ export default function KerjakanTryout() {
         router.push(`/program/nilai/${id}?attempt=${nextAttempt}`);
       });
     } catch (err) {
-      console.error("Error submitting answers:", err);
+      console.error("Error saat menyimpan jawaban:", err);
       Swal.fire({
         icon: "error",
         title: "Oops...",
-        text: "Gagal menyimpan jawaban! Periksa console untuk detail.",
+        text: err instanceof Error ? err.message : "Gagal menyimpan jawaban! Periksa console untuk detail.",
       });
     }
   };
@@ -374,7 +384,6 @@ export default function KerjakanTryout() {
               {formatTime(timeLeft)}
             </div>
           </div>
-
 
           {/* Question Card */}
           <div className="bg-white p-5 sm:p-6 rounded-xl shadow-lg mb-6 animate-fadeInUp delay-100">
